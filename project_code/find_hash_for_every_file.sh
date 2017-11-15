@@ -10,9 +10,11 @@ HASH_CMD="sha256sum"
 cd $DIR_WITH_FILES
 
 #get the hash of every file
+COUNTER=1
 for file in `ls`; do
     HASH=`cat $file | $HASH_CMD`
-    echo "$HASH  $file"
+    echo "$HASH  $file  -  $COUNTER"
+    ((COUNTER++))
 done |
 sort #pipe the entire output of the loop to "sort" command
 
