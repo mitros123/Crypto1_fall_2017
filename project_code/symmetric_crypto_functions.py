@@ -35,7 +35,9 @@ class Symmetric_Crypto_Functions:
     def add_nonce_to_msg(self,msg):
         #msg is a normal string
         self.nonce+=1
-        return (str(self.nonce)+"--->"+msg)
+        #what if msg contains "--->"??? We turn it into a byte string and encode it with base64, and then turn it back into string
+        msg_as_bs=self.turn_str_into_byte_string_of_same_value(msg)
+        return (str(self.nonce)+"--->"+self.turn_byte_string_into_normal_str(base64.b64encode(msg_as_bs))) #return value is a str once more
 
     def verify_nonce_of_msg(self,msg):
         #msg is a normal string
@@ -44,7 +46,9 @@ class Symmetric_Crypto_Functions:
             sys.stderr.write("Error in nonce! wanted "+str(self.nonce+1)+" and got "+str(nonce_recv)+"\n")
             exit(-1)
         self.nonce+=1
-        return (msg.split("--->")[1])
+        #we return a normal string. That is, we turn the part after the "--->" into bytestring, decode it with base64 and encode it back again
+        msg_as_bs=self.turn_str_into_byte_string_of_same_value(msg.split("--->")[1])
+        return (self.turn_byte_string_into_normal_str(base64.b64decode(msg_as_bs))) #return value is a str once more
 
 
     def close_and_reopen_write_pipe(self):
