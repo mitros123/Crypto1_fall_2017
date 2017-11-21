@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
 import os
+from pathlib import Path
 import sys
 from subprocess import Popen, PIPE
 from Crypto import Random
 from Crypto.Random import random
 from Crypto.PublicKey import ElGamal
-from Crypto.Util.number import GCD
+from Crypto.Util.number import GCD,inverse
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC,SHA256
 import time
 import base64
+import pickle
 
 
 sys.path.append('../.') #add the parent directory into the path, so that we can import the custom crypto functions
@@ -90,20 +92,76 @@ print("Sent AES key and MAC key to the other party.")
 print("From now on, all encryption will be done using symmetric crypto + nonces to protect from replay attacks.")
 
 
+print("Fetching generator and modulus for hash comparison (or waiting until they are created)...")
+#the generator g and prime p are created by Alice, for convenience. However, we assume that they have been agreed upon by the two parties. It's the same as hardcoding them into the program. 
+name_of_generator_and_modulus_file="../generator_and_modulus_file"
+generator_and_modulus_file = Path(name_of_generator_and_modulus_file)
+while (generator_and_modulus_file.is_file()==False):
+    time.sleep(1)
+#and when the waiting is over
+pubkey = pickle.load( open( name_of_generator_and_modulus_file, "rb" ) ) #load it from the file
 
-print("Receiving hashes...")
-responses=[]
+print("Received generator and modulus.")
+
+g=int(pubkey.g) #generator
+p=int(pubkey.p) #prime, for modulus
+
+
+same_hashes_ind=[]
+#compare the hashes protocol: for every hash m1, send m1*r1, g^r1
+
+print("Generating crypto numbers that will be sent...")
+#generate the crypto numbers that will be sent
+numbers_for_our_hashes=[]
+for j,hash_of_file in enumerate(hashes):
+    r2=random.StrongRandom().randint(1,p-1)
+    g_pow_r2=pow(g,r2,p)
+    hash_as_num=int(hash_of_file,16)%p
+    m2invr2=(inverse(hash_as_num,p)*r2)%p
+    numbers_for_our_hashes.append((r2,g_pow_r2,hash_as_num,m2invr2))
+
+#simple 2*n messages and comparison for equality in n^2. Can be done in n*log(n).    
+#send our hidden hash each time, for Alice to receive.
+print("Sending our hidden hashes...")
+for j,hash_of_file in enumerate(hashes):
+    r2,g_pow_r2,hash_as_num,m2invr2=numbers_for_our_hashes[j]
+    sc.secure_symmetric_send(str(m2invr2)+" "+str(g_pow_r2)+"\n",aes_key,mac_key)
+
+print("Receiving Alice's hashes...")
+#Receive messages from Alice
+alice_msgs=[]
 for i in range(num_of_total_files):
-    responses.append(sc.secure_symmetric_recv(aes_key,mac_key).replace("\n",""))#receive the hashes but remove the newline
-print(responses)
-responses= list(filter(None, responses)) #Remove empty strings from list of strings
+    alice_msg=sc.secure_symmetric_recv(aes_key,mac_key).strip()
+    m1r1=int(alice_msg.split(" ")[0])
+    g_pow_r1=int(alice_msg.split(" ")[1])
+    alice_msgs.append((m1r1,g_pow_r1))
 
+print("Comparing hashes...")
+#check if the two hashes are the same. Is g^(m1*r1*m2^(-1)*r2) equal to g^(r1*r2)? Todo: in n*log(n)
+for j,hash_of_file in enumerate(hashes):
+    print(str(j+1)+"/"+str(num_of_total_files))
+    r2,g_pow_r2,hash_as_num,m2invr2=numbers_for_our_hashes[j]
+   
+    for i in range(num_of_total_files):
+        (m1r1,g_pow_r1)=alice_msgs[i]
+        mult_all=(m2invr2*m1r1)%p
+        g_pow_mult_all=pow(g,mult_all,p)
+        g_pow_r1r2=pow(g_pow_r1,r2,p)
+        if (names[j]=='common_file_8' and i==5):
+            print(mult_all)
+            print(r2)
+            print(p)
+            print(g_pow_mult_all)
+            print(g_pow_r1r2)
+        if (g_pow_r1r2==g_pow_mult_all):
+            #found equal hash
+            print("oo")
+            same_hashes_ind.append(j)
+            break
 
-#find the common hashes and print the names
-for resp in responses:
-    for i,hash_of_our_files in enumerate(hashes):
-        if (resp==hash_of_our_files):
-            print(i,names[i])
+print("Printing equal files:")
+for index in same_hashes_ind:
+    print(names[index])   
 
 
 #close pipes
