@@ -3,3 +3,4 @@ common_file*
 Alice_distinct_file*
 Bob_distinct_file*
 __pycache__/
+Alice_asymmetric_keypair

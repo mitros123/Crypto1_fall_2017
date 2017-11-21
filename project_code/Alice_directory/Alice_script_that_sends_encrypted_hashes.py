@@ -3,6 +3,7 @@
 #uses Elgamal from https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal-module.html
 
 import os
+from pathlib import Path
 import sys
 from subprocess import Popen, PIPE
 from Crypto import Random
@@ -13,6 +14,7 @@ from Crypto.Cipher import AES
 from Crypto.Hash import HMAC,SHA256
 import time
 import base64
+import pickle
 
 sys.path.append('../.') #add the parent directory into the path, so that we can import the custom crypto functions
 from symmetric_crypto_functions import Symmetric_Crypto_Functions as SC
@@ -36,7 +38,7 @@ def find_hashes_names_indexes_of_our_files():
 we_are='Alice'
 they_are='Bob'
 num_of_total_files=100
-sc=SC()
+sc=SC() #object for symmetric crypto functions
 
 in_pipe='../'+they_are+'_out_'+we_are+'_in'
 out_pipe='../'+we_are+'_out_'+they_are+'_in'
@@ -59,10 +61,19 @@ print("Found them.")
 
 
 
-#construct Elgamal public key for communication
-print("Generating public key for communication...")
-pubkey = ElGamal.generate(1024, Random.new().read) #SOS! make it 2048 in the end
-print("ElGamal key generated.")
+#construct Elgamal public key for communication (or use the one that has already been created)
+asymmetric_keypair_file = Path("./Alice_asymmetric_keypair")
+if asymmetric_keypair_file.is_file():
+    print("Fetching asymmetric keypair from file...")
+    pubkey = pickle.load( open( "Alice_asymmetric_keypair", "rb" ) ) #load it from te file
+    print("ElGamal key loaded.")
+else:
+    print("No file with asymmetric keypair data found. Generating public key for communication...")
+    print("This will take some time, for keysize 2048 bits (~5 mins). Meanwhile, you can watch this video: http://youtu.be/msX4oAXpvUE :)")
+    pubkey = ElGamal.generate(2048, Random.new().read)
+    print("ElGamal key generated.")
+    pickle.dump( pubkey, open( "Alice_asymmetric_keypair", "wb" ) ) #put it in a file
+
 #print(pubkey.p) #prime
 #print(pubkey.g) #generator
 #print(pubkey.y) #public key
@@ -94,6 +105,7 @@ print("Received AES key and MAC key.")
 
 
 print("From now on, all encryption will be done using symmetric crypto + nonces to protect from replay attacks.")
+
 
 #write the hashes
 print("Sending hashes...")
