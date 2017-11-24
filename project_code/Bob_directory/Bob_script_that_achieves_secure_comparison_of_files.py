@@ -117,6 +117,7 @@ g=int(alice_enc_params.split("|")[2].strip())
 #The result is g^(r+r'), m2^(-1)*r1*m1*g^(x(r+r')). Alice receives that and she decrypts. If m1,m2 are equal, the decryption is equal to r1.
 #Bob sends g^r1, and Alice compares with her version of g^r1. If they are the same, she sends "Yes" to Bob. If not, she sends "No". Important: The assumptions
 #do not permit Alice to lie.
+#Of course we could do the symmetric for Bob, so as that he is content. Or use proper MPC.
 
 print("Initiating hashing comparison...")
 for i in range(num_of_total_files):
