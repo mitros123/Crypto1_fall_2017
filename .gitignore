@@ -5,3 +5,4 @@ Bob_distinct_file*
 __pycache__/
 Alice_asymmetric_keypair
 generator_and_modulus_file
+hash_hiding_key_file

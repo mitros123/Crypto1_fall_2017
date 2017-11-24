@@ -35,6 +35,18 @@ def find_hashes_names_indexes_of_our_files():
         indexes.append(line.split('-')[2].strip())
    
 
+def elgamal_encrypt(msg,pubkey,g,p): #all ints, pubkey=g^x
+    y=random.StrongRandom().randint(1,p-2)
+    return((pow(g,y,p),(msg*pow(pubkey,y,p))%p))
+
+def elgamal_decrypt(enc,g_pow_y,g,p,privkey): #all ints , privkey=x
+    g_pow_xy=pow(g_pow_y,privkey,p)
+    msg=(inverse(g_pow_xy,p)*enc)%p
+    return msg
+    
+    
+    
+
 we_are='Alice'
 they_are='Bob'
 num_of_total_files=100
@@ -109,79 +121,84 @@ print("From now on, all encryption will be done using symmetric crypto + nonces 
 
 
 
-#construct Elgamal generator and modulus (or use the one that has already been created)
-#We only need g and p. However, we havea function which does it for us (the ElGamal private/public key generator)
-#the g,p created are going to be read by Bob too. It's as if the two parties have agreed on them (hardcoded into the program).
-name_of_generator_and_modulus_file="../generator_and_modulus_file"
-generator_and_modulus_file = Path(name_of_generator_and_modulus_file)
-if generator_and_modulus_file.is_file():
+#construct Elgamal public, private key, generator and modulus (or use the one that has already been created)
+name_of_hash_hiding_key_file="hash_hiding_key_file"
+hash_hiding_key_file = Path(name_of_hash_hiding_key_file)
+if hash_hiding_key_file.is_file():
     print("Fetching generator and modulus from file...")
-    pubkey = pickle.load( open( name_of_generator_and_modulus_file, "rb" ) ) #load it from the file
+    pubkey = pickle.load( open( name_of_hash_hiding_key_file, "rb" ) ) #load it from the file
     print("Generator and modulus loaded.")
 else:
     print("No file with generator and modulus data found. Generating them...")
     print("This will take some time, for n=2048 bits (~5 mins). Meanwhile, you can watch this video: http://youtu.be/9sJUDx7iEJw :)")
     pubkey = ElGamal.generate(2048, Random.new().read)
     print("ElGamal key generated.")
-    pickle.dump( pubkey, open( name_of_generator_and_modulus_file, "wb" ) ) #put it in a file
+    pickle.dump( pubkey, open( name_of_hash_hiding_key_file, "wb" ) ) #put it in a file
 
 
 g=int(pubkey.g) #generator
 p=int(pubkey.p) #prime, for modulus
+public_key=int(pubkey.y)
+priv_key=int(pubkey.x)
+
+#send public key, prime, generator to Bob
+sc.secure_symmetric_send(str(public_key)+"|"+str(p)+"|"+str(g),aes_key,mac_key)
 
 
 same_hashes_ind=[]
-#compare the hashes protocol: for every hash m1, send m1*r1, g^r1
+#compare the hashes protocol: for every hash m1, Alice calculates the enryption of m1. g^r,m1*g^(xr). She sends that to Bob.
+#Bob creates the encryption of m2^(-1)*r1 (r1 is a random value) g^(r'), m2^(-1)*r1*g^(xr'). He multiplies by the encryption of m1, for the hmomomorphic encryption
+#The result is g^(r+r'), m2^(-1)*r1*m1*g^(x(r+r')). Alice receives that and she decrypts. If m1,m2 are equal, the decryption is equal to r1.
+#Bob sends g^r1, and Alice compares with her version of g^r1. If they are the same, she sends "Yes" to Bob. If not, she sends "No". Important: The assumptions
+#do not permit Alice to lie.
 
 print("Generating crypto numbers that will be sent...")
-#generate the crypto numbers that will be sent
 numbers_for_our_hashes=[]
 for j,hash_of_file in enumerate(hashes):
-    r1=random.StrongRandom().randint(1,p-1)
-    g_pow_r1=pow(g,r1,p)
-    hash_as_num=int(hash_of_file,16)%p
-    m1r1=(r1*hash_as_num)%p
-    numbers_for_our_hashes.append((r1,g_pow_r1,hash_as_num,m1r1))
+    print(str(j+1)+"/"+str(num_of_total_files))
+    hash_as_num=int(hash_of_file,16)
+    encrypted_hash=ElGamal.ElGamalobj()
+    encrypted_hash.p=p; encrypted_hash.g=g; encrypted_hash.y=public_key; encrypted_hash.x=priv_key;
 
+    #https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal.ElGamalobj-class.html#encrypt
+    elgamal_values=encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(hash_as_num),random.StrongRandom().randint(1,p-2))
+    elgamal_value_1=sc.turn_byte_string_into_int_of_same_value(elgamal_values[0])
+    elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
+    '''
+    #Or
+    (g_pow_y_1,enc_1)=elgamal_encrypt(hash_as_num,public_key,g,p)
+    elgamal_value_1=enc_1
+    elgamal_value_2=g_pow_y_1
+    '''
 
-#simple 2*n messages and comparison for equality in n^2. Can be done in n*log(n).
-#receive Bob's messages
-print("Receiving Bob's hashes...")
-bob_msgs=[]
-for i in range(num_of_total_files):
-    bobs_msg=sc.secure_symmetric_recv(aes_key,mac_key).strip()
-    m2invr2=int(bobs_msg.split(" ")[0])
-    g_pow_r2=int(bobs_msg.split(" ")[1])
-    bob_msgs.append((m2invr2,g_pow_r2))
+    sc.secure_symmetric_send(str(elgamal_value_1)+"|"+str(elgamal_value_2)+"\n",aes_key,mac_key)
+    #print(elgamal_value_1,elgamal_value_2)
 
-print("Sending our hidden hashes...")
-#send our hidden hash each time, for Bob to receive.
-for j,hash_of_file in enumerate(hashes):
-    (r1,g_pow_r1,hash_as_num, m1r1)=numbers_for_our_hashes[j]
-    sc.secure_symmetric_send(str(m1r1)+" "+str(g_pow_r1)+"\n",aes_key,mac_key)
-
-print("Comparing hashes...")
-#check if the two hashes are the same. Is g^(m1*r1*m2^(-1)*r2) equal to g^(r1*r2)? Todo: in n*log(n)
-for i in range(num_of_total_files):
-    print(str(i+1)+"/"+str(num_of_total_files))
-    (m2invr2,g_pow_r2)=bob_msgs[i]
+    for i in range(num_of_total_files):
+        #receive Bob's homomorphic encryption of both messages
+        homom_enc=sc.secure_symmetric_recv(aes_key,mac_key)
+    
+        first_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[0].strip()))
+        second_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[1].strip()))
+        #https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal.ElGamalobj-class.html#decrypt
+        homom_dec=encrypted_hash.decrypt((first_part_of_enc,second_part_of_enc))
+        homom_dec_num=sc.turn_byte_string_into_int_of_same_value(homom_dec)
+        '''
+        #Or
+        first_part_of_enc=int(homom_enc.split("|")[0].strip())
+        second_part_of_enc=int(homom_enc.split("|")[1].strip())
+        homom_dec_num=elgamal_decrypt(first_part_of_enc,second_part_of_enc,g,p,priv_key)
+        '''
         
-    for j,hash_of_file in enumerate(hashes):
-        (r1,g_pow_r1,hash_as_num, m1r1)=numbers_for_our_hashes[j]
-        mult_all=(m2invr2*m1r1)%p
+        g_pow_r1=int(sc.secure_symmetric_recv(aes_key,mac_key))
+        mult_all=homom_dec_num%p
         g_pow_mult_all=pow(g,mult_all,p)
-        g_pow_r1r2=pow(g_pow_r2,r1,p)
-        if (names[j]=='common_file_8' and i==2):
-            print(mult_all)
-            print(r1)
-            print(p)
-            print(g_pow_mult_all)
-            print(g_pow_r1r2)
-        if (g_pow_r1r2==g_pow_mult_all):
-            #found equal hash
-            print("a")
+        reply="No"
+        if (g_pow_r1==g_pow_mult_all):
+            print("Common hash: index:"+str(j+1)+", name: "+str(names[j]))
             same_hashes_ind.append(j)
-            break
+            reply="Yes"
+        sc.secure_symmetric_send(reply,aes_key,mac_key)
 
 print("Printing equal files:")
 for index in same_hashes_ind:

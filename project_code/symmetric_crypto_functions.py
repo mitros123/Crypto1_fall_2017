@@ -86,6 +86,13 @@ class Symmetric_Crypto_Functions:
 
     def turn_byte_string_into_normal_str(self,bytestr):
         return bytestr.decode("utf-8")
+    
+    def turn_int_into_byte_string_of_same_value(self,int_in):
+        x=int_in
+        return x.to_bytes((x.bit_length() + 7)//8, byteorder='big')
+
+    def turn_byte_string_into_int_of_same_value(self,bytestr):
+        return int.from_bytes(bytestr,byteorder='big')
 
     #https://www.dlitz.net/software/pycrypto/api/current/Crypto.Hash.HMAC-module.html
     def hmac(self,msg,mac_key):

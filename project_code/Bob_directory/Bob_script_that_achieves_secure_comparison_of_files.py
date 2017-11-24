@@ -33,6 +33,14 @@ def find_hashes_names_indexes_of_our_files():
         indexes.append(line.split('-')[2].strip())
 
 
+def elgamal_encrypt(msg,pubkey,g,p): #all ints, pubkey=g^x
+    y=random.StrongRandom().randint(1,p-2)
+    return((pow(g,y,p),(msg*pow(pubkey,y,p))%p))
+
+def elgamal_decrypt(enc,g_pow_y,g,p,privkey): #all ints , privkey=x
+    g_pow_xy=pow(g_pow_y,privkey,p)
+    msg=(inverse(g_pow_xy,p)*enc)%p
+    return msg
 
 
 we_are='Bob'
@@ -92,72 +100,60 @@ print("Sent AES key and MAC key to the other party.")
 print("From now on, all encryption will be done using symmetric crypto + nonces to protect from replay attacks.")
 
 
-print("Fetching generator and modulus for hash comparison (or waiting until they are created)...")
-#the generator g and prime p are created by Alice, for convenience. However, we assume that they have been agreed upon by the two parties. It's the same as hardcoding them into the program. 
-name_of_generator_and_modulus_file="../generator_and_modulus_file"
-generator_and_modulus_file = Path(name_of_generator_and_modulus_file)
-while (generator_and_modulus_file.is_file()==False):
-    time.sleep(1)
-#and when the waiting is over
-pubkey = pickle.load( open( name_of_generator_and_modulus_file, "rb" ) ) #load it from the file
-
-print("Received generator and modulus.")
-
-g=int(pubkey.g) #generator
-p=int(pubkey.p) #prime, for modulus
 
 
+
+
+print("Fetching encryption values")
 same_hashes_ind=[]
-#compare the hashes protocol: for every hash m1, send m1*r1, g^r1
+alice_enc_params=sc.secure_symmetric_recv(aes_key,mac_key)
+public_key=int(alice_enc_params.split("|")[0].strip())
+p=int(alice_enc_params.split("|")[1].strip())
+g=int(alice_enc_params.split("|")[2].strip())
 
-print("Generating crypto numbers that will be sent...")
-#generate the crypto numbers that will be sent
-numbers_for_our_hashes=[]
-for j,hash_of_file in enumerate(hashes):
-    r2=random.StrongRandom().randint(1,p-1)
-    g_pow_r2=pow(g,r2,p)
-    hash_as_num=int(hash_of_file,16)%p
-    m2invr2=(inverse(hash_as_num,p)*r2)%p
-    numbers_for_our_hashes.append((r2,g_pow_r2,hash_as_num,m2invr2))
 
-#simple 2*n messages and comparison for equality in n^2. Can be done in n*log(n).    
-#send our hidden hash each time, for Alice to receive.
-print("Sending our hidden hashes...")
-for j,hash_of_file in enumerate(hashes):
-    r2,g_pow_r2,hash_as_num,m2invr2=numbers_for_our_hashes[j]
-    sc.secure_symmetric_send(str(m2invr2)+" "+str(g_pow_r2)+"\n",aes_key,mac_key)
+#compare the hashes protocol: for every hash m1, Alice calculates the enryption of m1. g^r,m1*g^(xr). She sends that to Bob.
+#Bob creates the encryption of m2^(-1)*r1 (r1 is a random value) g^(r'), m2^(-1)*r1*g^(xr'). He multiplies by the encryption of m1, for the hmomomorphic encryption
+#The result is g^(r+r'), m2^(-1)*r1*m1*g^(x(r+r')). Alice receives that and she decrypts. If m1,m2 are equal, the decryption is equal to r1.
+#Bob sends g^r1, and Alice compares with her version of g^r1. If they are the same, she sends "Yes" to Bob. If not, she sends "No". Important: The assumptions
+#do not permit Alice to lie.
 
-print("Receiving Alice's hashes...")
-#Receive messages from Alice
-alice_msgs=[]
 for i in range(num_of_total_files):
-    alice_msg=sc.secure_symmetric_recv(aes_key,mac_key).strip()
-    m1r1=int(alice_msg.split(" ")[0])
-    g_pow_r1=int(alice_msg.split(" ")[1])
-    alice_msgs.append((m1r1,g_pow_r1))
+    print(str(i+1)+"/"+str(num_of_total_files))
+    alice_enc_hash=sc.secure_symmetric_recv(aes_key,mac_key)
+    alice_enc_hash_value_1=int(alice_enc_hash.split("|")[0].strip())
+    alice_enc_hash_value_2=int(alice_enc_hash.split("|")[1].strip())
 
-print("Comparing hashes...")
-#check if the two hashes are the same. Is g^(m1*r1*m2^(-1)*r2) equal to g^(r1*r2)? Todo: in n*log(n)
-for j,hash_of_file in enumerate(hashes):
-    print(str(j+1)+"/"+str(num_of_total_files))
-    r2,g_pow_r2,hash_as_num,m2invr2=numbers_for_our_hashes[j]
-   
-    for i in range(num_of_total_files):
-        (m1r1,g_pow_r1)=alice_msgs[i]
-        mult_all=(m2invr2*m1r1)%p
-        g_pow_mult_all=pow(g,mult_all,p)
-        g_pow_r1r2=pow(g_pow_r1,r2,p)
-        if (names[j]=='common_file_8' and i==5):
-            print(mult_all)
-            print(r2)
-            print(p)
-            print(g_pow_mult_all)
-            print(g_pow_r1r2)
-        if (g_pow_r1r2==g_pow_mult_all):
-            #found equal hash
-            print("oo")
+    for j,hash_of_file in enumerate(hashes):
+        hash_as_num=int(hash_of_file,16)
+        #print(hash_as_num)
+        r1=random.StrongRandom().randint(1,p-1)
+        g_pow_r1=pow(g,r1,p)
+        our_encrypted_hash=ElGamal.ElGamalobj()
+        our_encrypted_hash.p=p; our_encrypted_hash.g=g; our_encrypted_hash.y=public_key;
+        m2invr1=(inverse(hash_as_num,p)*r1)%p
+
+        elgamal_values=our_encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(m2invr1),random.StrongRandom().randint(1,p-2))
+        elgamal_value_1=sc.turn_byte_string_into_int_of_same_value(elgamal_values[0])
+        elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
+        '''
+        #Or
+        (g_pow_y_2,enc_2)=elgamal_encrypt(m2invr1,public_key,g,p)
+        elgamal_value_1=enc_2
+        elgamal_value_2=g_pow_y_2  
+        '''          
+
+        homom_enc_value_1=(alice_enc_hash_value_1*elgamal_value_1)%p
+        homom_enc_value_2=(alice_enc_hash_value_2*elgamal_value_2)%p
+ 
+        sc.secure_symmetric_send(str(homom_enc_value_1)+"|"+str(homom_enc_value_2),aes_key,mac_key)
+        sc.secure_symmetric_send(str(g_pow_r1),aes_key,mac_key)
+        reply=sc.secure_symmetric_recv(aes_key,mac_key)
+        if(reply=="Yes"):
             same_hashes_ind.append(j)
-            break
+            print("Common hash: index:"+str(j+1)+", name: "+str(names[j]))
+        
+        
 
 print("Printing equal files:")
 for index in same_hashes_ind:
