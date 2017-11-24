@@ -35,6 +35,7 @@ def find_hashes_names_indexes_of_our_files():
         indexes.append(line.split('-')[2].strip())
    
 
+#our custom functions, experimental (we don't use them)
 def elgamal_encrypt(msg,pubkey,g,p): #all ints, pubkey=g^x
     y=random.StrongRandom().randint(1,p-2)
     return((pow(g,y,p),(msg*pow(pubkey,y,p))%p))
@@ -122,6 +123,7 @@ print("From now on, all encryption will be done using symmetric crypto + nonces 
 
 
 #construct Elgamal public, private key, generator and modulus (or use the one that has already been created)
+#this one is for hiding the hashes
 name_of_hash_hiding_key_file="hash_hiding_key_file"
 hash_hiding_key_file = Path(name_of_hash_hiding_key_file)
 if hash_hiding_key_file.is_file():
@@ -152,10 +154,12 @@ same_hashes_ind=[]
 #Bob sends g^r1, and Alice compares with her version of g^r1. If they are the same, she sends "Yes" to Bob. If not, she sends "No". Important: The assumptions
 #do not permit Alice to lie.
 
-print("Generating crypto numbers that will be sent...")
+print("Initiating hashing comparison...")
 numbers_for_our_hashes=[]
 for j,hash_of_file in enumerate(hashes):
     print(str(j+1)+"/"+str(num_of_total_files))
+    
+    #encrypt our hash
     hash_as_num=int(hash_of_file,16)
     encrypted_hash=ElGamal.ElGamalobj()
     encrypted_hash.p=p; encrypted_hash.g=g; encrypted_hash.y=public_key; encrypted_hash.x=priv_key;
@@ -166,18 +170,19 @@ for j,hash_of_file in enumerate(hashes):
     elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
     '''
     #Or
-    (g_pow_y_1,enc_1)=elgamal_encrypt(hash_as_num,public_key,g,p)
+    (g_pow_y_1,enc_1)=elgamal_encrypt(hash_as_num,public_key,g,p) #custom encryption
     elgamal_value_1=enc_1
     elgamal_value_2=g_pow_y_1
     '''
 
+    #send encryption of our hash to Bob
     sc.secure_symmetric_send(str(elgamal_value_1)+"|"+str(elgamal_value_2)+"\n",aes_key,mac_key)
-    #print(elgamal_value_1,elgamal_value_2)
 
     for i in range(num_of_total_files):
         #receive Bob's homomorphic encryption of both messages
         homom_enc=sc.secure_symmetric_recv(aes_key,mac_key)
     
+        #decrypt the homomorphic encryption to receive the product of m1,m2^(-1),r1
         first_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[0].strip()))
         second_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[1].strip()))
         #https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal.ElGamalobj-class.html#decrypt
@@ -190,9 +195,9 @@ for j,hash_of_file in enumerate(hashes):
         homom_dec_num=elgamal_decrypt(first_part_of_enc,second_part_of_enc,g,p,priv_key)
         '''
         
-        g_pow_r1=int(sc.secure_symmetric_recv(aes_key,mac_key))
+        g_pow_r1=int(sc.secure_symmetric_recv(aes_key,mac_key)) #receive g^r1
         mult_all=homom_dec_num%p
-        g_pow_mult_all=pow(g,mult_all,p)
+        g_pow_mult_all=pow(g,mult_all,p) #g^(m1*m2^(-1)*r1)
         reply="No"
         if (g_pow_r1==g_pow_mult_all):
             print("Common hash: index:"+str(j+1)+", name: "+str(names[j]))

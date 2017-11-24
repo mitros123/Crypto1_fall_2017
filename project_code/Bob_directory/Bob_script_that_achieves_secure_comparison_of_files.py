@@ -32,7 +32,7 @@ def find_hashes_names_indexes_of_our_files():
         names.append(line.split('-')[1].strip())
         indexes.append(line.split('-')[2].strip())
 
-
+#our custom functions, experimental (we don't use them)
 def elgamal_encrypt(msg,pubkey,g,p): #all ints, pubkey=g^x
     y=random.StrongRandom().randint(1,p-2)
     return((pow(g,y,p),(msg*pow(pubkey,y,p))%p))
@@ -118,21 +118,23 @@ g=int(alice_enc_params.split("|")[2].strip())
 #Bob sends g^r1, and Alice compares with her version of g^r1. If they are the same, she sends "Yes" to Bob. If not, she sends "No". Important: The assumptions
 #do not permit Alice to lie.
 
+print("Initiating hashing comparison...")
 for i in range(num_of_total_files):
     print(str(i+1)+"/"+str(num_of_total_files))
+    #get the encryption of alice's hash
     alice_enc_hash=sc.secure_symmetric_recv(aes_key,mac_key)
     alice_enc_hash_value_1=int(alice_enc_hash.split("|")[0].strip())
     alice_enc_hash_value_2=int(alice_enc_hash.split("|")[1].strip())
 
     for j,hash_of_file in enumerate(hashes):
         hash_as_num=int(hash_of_file,16)
-        #print(hash_as_num)
         r1=random.StrongRandom().randint(1,p-1)
         g_pow_r1=pow(g,r1,p)
         our_encrypted_hash=ElGamal.ElGamalobj()
         our_encrypted_hash.p=p; our_encrypted_hash.g=g; our_encrypted_hash.y=public_key;
         m2invr1=(inverse(hash_as_num,p)*r1)%p
 
+        #encrypt m2^(-1)*r1
         elgamal_values=our_encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(m2invr1),random.StrongRandom().randint(1,p-2))
         elgamal_value_1=sc.turn_byte_string_into_int_of_same_value(elgamal_values[0])
         elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
@@ -143,11 +145,15 @@ for i in range(num_of_total_files):
         elgamal_value_2=g_pow_y_2  
         '''          
 
+        #calculate the hoomorphic encryption by multiplying
         homom_enc_value_1=(alice_enc_hash_value_1*elgamal_value_1)%p
         homom_enc_value_2=(alice_enc_hash_value_2*elgamal_value_2)%p
  
+        #send the homomorphic encryption as well as g^r1
         sc.secure_symmetric_send(str(homom_enc_value_1)+"|"+str(homom_enc_value_2),aes_key,mac_key)
         sc.secure_symmetric_send(str(g_pow_r1),aes_key,mac_key)
+        
+        #receive reply if they are the same
         reply=sc.secure_symmetric_recv(aes_key,mac_key)
         if(reply=="Yes"):
             same_hashes_ind.append(j)
