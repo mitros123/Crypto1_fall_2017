@@ -119,6 +119,30 @@ g=int(alice_enc_params.split("|")[2].strip())
 #do not permit Alice to lie.
 #Of course we could do the symmetric for Bob, so as that he is content. Or use proper MPC.
 
+
+my_hashes=[]
+print("Pre-calculating all the encryptions...")
+#Bob will calculate his encryptions once and remember them
+for j,hash_of_file in enumerate(hashes):
+    hash_as_num=int(hash_of_file,16)
+    r1=random.StrongRandom().randint(1,p-1)
+    g_pow_r1=pow(g,r1,p)
+    our_encrypted_hash=ElGamal.ElGamalobj()
+    our_encrypted_hash.p=p; our_encrypted_hash.g=g; our_encrypted_hash.y=public_key;
+    m2invr1=(inverse(hash_as_num,p)*r1)%p
+
+    #encrypt m2^(-1)*r1
+    elgamal_values=our_encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(m2invr1),random.StrongRandom().randint(1,p-2))
+    elgamal_value_1=sc.turn_byte_string_into_int_of_same_value(elgamal_values[0])
+    elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
+    '''
+    #Or
+    (g_pow_y_2,enc_2)=elgamal_encrypt(m2invr1,public_key,g,p)
+    elgamal_value_1=enc_2
+    elgamal_value_2=g_pow_y_2  
+    '''    
+    my_hashes.append((hash_as_num,r1,g_pow_r1,m2invr1,elgamal_value_1,elgamal_value_2))
+
 print("Initiating hashing comparison...")
 for i in range(num_of_total_files):
     print(str(i+1)+"/"+str(num_of_total_files))
@@ -128,24 +152,7 @@ for i in range(num_of_total_files):
     alice_enc_hash_value_2=int(alice_enc_hash.split("|")[1].strip())
 
     for j,hash_of_file in enumerate(hashes):
-        hash_as_num=int(hash_of_file,16)
-        r1=random.StrongRandom().randint(1,p-1)
-        g_pow_r1=pow(g,r1,p)
-        our_encrypted_hash=ElGamal.ElGamalobj()
-        our_encrypted_hash.p=p; our_encrypted_hash.g=g; our_encrypted_hash.y=public_key;
-        m2invr1=(inverse(hash_as_num,p)*r1)%p
-
-        #encrypt m2^(-1)*r1
-        elgamal_values=our_encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(m2invr1),random.StrongRandom().randint(1,p-2))
-        elgamal_value_1=sc.turn_byte_string_into_int_of_same_value(elgamal_values[0])
-        elgamal_value_2=sc.turn_byte_string_into_int_of_same_value(elgamal_values[1])
-        '''
-        #Or
-        (g_pow_y_2,enc_2)=elgamal_encrypt(m2invr1,public_key,g,p)
-        elgamal_value_1=enc_2
-        elgamal_value_2=g_pow_y_2  
-        '''          
-
+        (hash_as_num,r1,g_pow_r1,m2invr1,elgamal_value_1,elgamal_value_2)=my_hashes[j]
         #calculate the hoomorphic encryption by multiplying
         homom_enc_value_1=(alice_enc_hash_value_1*elgamal_value_1)%p
         homom_enc_value_2=(alice_enc_hash_value_2*elgamal_value_2)%p
