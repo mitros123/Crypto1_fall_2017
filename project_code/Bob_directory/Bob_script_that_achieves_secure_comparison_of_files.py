@@ -166,6 +166,7 @@ for i in range(num_of_total_files):
         if(reply=="Yes"):
             same_hashes_ind.append(j)
             print("Common hash: index:"+str(j+1)+", name: "+str(names[j]))
+            break
         
         
 

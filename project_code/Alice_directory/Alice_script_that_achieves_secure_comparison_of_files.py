@@ -157,13 +157,13 @@ same_hashes_ind=[]
 
 print("Initiating hashing comparison...")
 numbers_for_our_hashes=[]
+encrypted_hash=ElGamal.ElGamalobj()
+encrypted_hash.p=p; encrypted_hash.g=g; encrypted_hash.y=public_key; encrypted_hash.x=priv_key;
 for j,hash_of_file in enumerate(hashes):
     print(str(j+1)+"/"+str(num_of_total_files))
     
     #encrypt our hash
     hash_as_num=int(hash_of_file,16)
-    encrypted_hash=ElGamal.ElGamalobj()
-    encrypted_hash.p=p; encrypted_hash.g=g; encrypted_hash.y=public_key; encrypted_hash.x=priv_key;
 
     #https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal.ElGamalobj-class.html#encrypt
     elgamal_values=encrypted_hash.encrypt(sc.turn_int_into_byte_string_of_same_value(hash_as_num),random.StrongRandom().randint(1,p-2))
@@ -182,10 +182,12 @@ for j,hash_of_file in enumerate(hashes):
     for i in range(num_of_total_files):
         #receive Bob's homomorphic encryption of both messages
         homom_enc=sc.secure_symmetric_recv(aes_key,mac_key)
+        g_pow_r1=int(sc.secure_symmetric_recv(aes_key,mac_key)) #receive g^r1
+        homom_enc_split=homom_enc.split("|")
     
         #decrypt the homomorphic encryption to receive the product of m1,m2^(-1),r1
-        first_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[0].strip()))
-        second_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc.split("|")[1].strip()))
+        first_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc_split[0].strip()))
+        second_part_of_enc=sc.turn_int_into_byte_string_of_same_value(int(homom_enc_split[1].strip()))
         #https://www.dlitz.net/software/pycrypto/api/current/Crypto.PublicKey.ElGamal.ElGamalobj-class.html#decrypt
         homom_dec=encrypted_hash.decrypt((first_part_of_enc,second_part_of_enc))
         homom_dec_num=sc.turn_byte_string_into_int_of_same_value(homom_dec)
@@ -196,7 +198,6 @@ for j,hash_of_file in enumerate(hashes):
         homom_dec_num=elgamal_decrypt(first_part_of_enc,second_part_of_enc,g,p,priv_key)
         '''
         
-        g_pow_r1=int(sc.secure_symmetric_recv(aes_key,mac_key)) #receive g^r1
         mult_all=homom_dec_num%p
         g_pow_mult_all=pow(g,mult_all,p) #g^(m1*m2^(-1)*r1)
         reply="No"
@@ -205,6 +206,7 @@ for j,hash_of_file in enumerate(hashes):
             same_hashes_ind.append(j)
             reply="Yes"
         sc.secure_symmetric_send(reply,aes_key,mac_key)
+        if (reply=="Yes"): break;
 
 print("Printing equal files:")
 for index in same_hashes_ind:
