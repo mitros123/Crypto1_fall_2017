@@ -1,30 +1,30 @@
 Packages needed: python3-crypto
 
-Story:
+<h3>Story</h3>
 Alice and Bob have many files. They want to compare if some of them are equal. They only want to disclose if two are equal or not, and no more info, if possible.
 They also want to communicate over a secure channel, so as that no eavesdropper can understand what they are saying.
 
-Assumptions:
-i) We assume that Alice and Bob are semi-honest, that means that they follow the protocol but they will try to calculate extra stuff afterwards. We want to minimize the information that is leaked.
-ii) We can't use MPC or Zero-Knowledge Proofs, only up to ElGamal asymmetric encryption and its homomorphic properties.
-iii) We assume that SHA256 is a collision resistant hash
-iv) We assume that HMAC-SHA256 is a good MAC
-v) We assume that AES is a good encryption primitive
-vi) We assume that Bob knows Alice's public key (and the corresponding generator g and prime p). We simply send them at the start, we assume these are not tampered with.
+<h3>Assumptions</h3>
+**i)** We assume that Alice and Bob are semi-honest, that means that they follow the protocol but they will try to calculate extra stuff afterwards. We want to minimize the information that is leaked.
+**ii)** We can't use MPC or Zero-Knowledge Proofs, only up to ElGamal asymmetric encryption and its homomorphic properties. 
+**iii)** We assume that SHA256 is a collision resistant hash.
+**iv)** We assume that HMAC-SHA256 is a good MAC.
+**v)** We assume that AES is a good encryption primitive.
+**vi)** We assume that Bob knows Alice's public key (and the corresponding generator g and prime p). We simply send them at the start, we assume these are not tampered with. 
 
 
-How to run:
-i) cd to project_code and run init_structure.sh. This will create the files whose hashes we compare. Default is 100 files, 80 distinct and 20 common (their names imply their property).
+<h3>How to run</h3>
+**i)** cd to project_code and run init_structure.sh. This will create the files whose hashes we compare. Default is 100 files, 80 distinct and 20 common (their names imply their property).
 It also creates two named pipes. One is for Alice's output/Bob's input, and the other for Bob's output/Alice's input. This is the "channel" they communicate over, and we consider it unsecure.
-ii) Open two separate terminals. One should cd into Alice's directory, the other into Bob's directory.
-iii) Run ./Bob_script_that_achieves_secure_comparison_of_files.py and ./Alice_script_that_achieves_secure_comparison_of_files.py. At the first time Alice will generate keys, and it will take some time.
-iv) Watch the output.
+**ii)** Open two separate terminals. One should cd into Alice's directory, the other into Bob's directory.
+**iii)** Run ./Bob_script_that_achieves_secure_comparison_of_files.py and ./Alice_script_that_achieves_secure_comparison_of_files.py. At the first time Alice will generate keys, and it will take some time.
+**iv)** Watch the output.
 
-Secure communication:
-i)With Alice's public key, Bob samples two random integers from {1 ... 2^128-1} and sends them (encrypted) to Alice. They are the encryption and the authentication keys.
+<h3>Secure communication</h3>
+With Alice's public key, Bob samples two random integers from {1 ... 2^128-1} and sends them (encrypted) to Alice. They are the encryption and the authentication keys.
 After that, they start communication with symmetric crypto (the functions are in project_code/symmetric_crypto_functions.py). They use nonces for defence against replay attacks, encryption with AES-CBC (with a random IV) and then authentication with HMAC-SHA256 (Encrypt-then-MAC).
 
-Secure hash comparison:
+<h3>Secure hash comparison</h3>
 Assume we need to compare the two hashes of two files, m1 (Alice) and m2 (Bob).
 Alice generates an ElGamal key, and sends the public key to Bob, as well as the generator g and prime p. Let g^x be the public key, and x the private key.
 She encrypts her message m1 with this key, ands sends the encryption to Bob: g^y,m1*g^(xy)
