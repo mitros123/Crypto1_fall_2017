@@ -6,7 +6,7 @@ from subprocess import Popen, PIPE
 
 we_are='Alice'
 they_are='Bob'
-num_of_total_files=100
+num_of_total_files=30
 
 in_pipe='../'+they_are+'_out_'+we_are+'_in'
 out_pipe='../'+we_are+'_out_'+they_are+'_in'

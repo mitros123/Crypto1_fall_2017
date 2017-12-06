@@ -37,7 +37,7 @@ def find_hashes_names_indexes_of_our_files():
 
 we_are='Alice'
 they_are='Bob'
-num_of_total_files=100
+num_of_total_files=30
 sc=SC() #object for symmetric crypto functions
 
 in_pipe='../'+they_are+'_out_'+we_are+'_in'

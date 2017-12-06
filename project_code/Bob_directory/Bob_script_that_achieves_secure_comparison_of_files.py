@@ -45,7 +45,7 @@ def elgamal_decrypt(enc,g_pow_y,g,p,privkey): #all ints , privkey=x
 
 we_are='Bob'
 they_are='Alice'
-num_of_total_files=100
+num_of_total_files=30
 sc=SC() #object for symmetric crypto functions
 
 in_pipe='../'+they_are+'_out_'+we_are+'_in'
