@@ -1,3 +1,8 @@
+<h1>Crypto 1 Project Fall 2017, RPI</h1>
+
+Students: Akshay Bhazin (bhasia@rpi.edu)
+Konstantinos Mitropoulos (mitros123@hotmail.com)
+
 Packages needed: python3-crypto
 
 <h3>Story</h3>
